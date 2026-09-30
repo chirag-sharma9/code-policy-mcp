@@ -65,21 +65,29 @@ mattered.
 ### 4.2 `RepositoryProvider` interface
 
 ```python
-class RepositoryProvider(Protocol):
+class RepositoryProvider(ABC):
+    @abstractmethod
     async def resolve(self, url: str) -> RepoRef                      # owner, name, default branch, sha
+    @abstractmethod
     async def list_files(self, ref: RepoRef) -> list[str]             # paths at that sha
+    @abstractmethod
+    async def tree_truncated(self, ref: RepoRef) -> bool              # listing capped by the platform?
+    @abstractmethod
     async def read_file(self, ref: RepoRef, path: str) -> str | None
 ```
 
-Policies only ever see this interface. Adding Bitbucket or GitLab is a new class; policies do
-not change. URL parsing decides which provider handles a request.
+Policies only ever see this interface. Adding Bitbucket or GitLab is a new subclass; policies do
+not change. URL parsing decides which provider handles a request. Interfaces are abstract base
+classes rather than `typing.Protocol`: a provider or policy that forgets a method fails when it
+is instantiated, not when a policy first calls it mid-scan.
 
 ### 4.3 `Policy` interface and registry
 
 ```python
-class Policy(Protocol):
+class Policy(ABC):
     id: str
     description: str
+    @abstractmethod
     async def evaluate(self, ref: RepoRef, provider: RepositoryProvider) -> PolicyResult
 ```
 

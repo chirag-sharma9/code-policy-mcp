@@ -13,6 +13,7 @@ from repo_policy.providers.base import (
     NotFoundError,
     ProviderError,
     RateLimitedError,
+    RepositoryProvider,
 )
 
 API_URL = "https://api.github.com"
@@ -49,7 +50,7 @@ class _Tree:
     truncated: bool
 
 
-class GitHubProvider:
+class GitHubProvider(RepositoryProvider):
     """GitHub REST implementation. Create one per ``check()`` call so memoization is request-scoped."""
 
     def __init__(self, client: httpx.AsyncClient, token: str | None = None) -> None:
