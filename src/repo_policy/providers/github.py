@@ -135,6 +135,16 @@ class GitHubProvider(RepositoryProvider):
             raise RateLimitedError(f"GitHub API rate limit exceeded{when}; {hint}")
         if status == 404:
             raise NotFoundError(f"GitHub returned 404 for {path} (missing, or private without a token)")
+        detail = f": {message}" if (message := self._message(response)) else ""
         if status in (401, 403):
-            raise ProviderError(f"GitHub denied access to {path} (HTTP {status}); check GITHUB_TOKEN")
-        raise ProviderError(f"GitHub returned HTTP {status} for {path}")
+            raise ProviderError(f"GitHub denied access to {path} (HTTP {status}){detail}; check GITHUB_TOKEN")
+        raise ProviderError(f"GitHub returned HTTP {status} for {path}{detail}")
+
+    @staticmethod
+    def _message(response: httpx.Response) -> str | None:
+        try:
+            body = response.json()
+        except ValueError:
+            return None
+        message = body.get("message") if isinstance(body, dict) else None
+        return message.rstrip(".") if isinstance(message, str) else None
