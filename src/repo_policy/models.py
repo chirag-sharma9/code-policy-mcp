@@ -2,6 +2,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# high: the verdict rests on concrete evidence, or on a complete search that found nothing.
+# medium: the search was incomplete (truncated file listing or capped scan), so a fail may be wrong.
+# low: something related was found that the rule cannot count; a human should look.
 Confidence = Literal["high", "medium", "low"]
 
 

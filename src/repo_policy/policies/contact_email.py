@@ -22,11 +22,13 @@ class ContactEmailPolicy(Policy):
         files = await provider.list_files(ref)
         readmes = _front_page_readmes(files)
         if not readmes:
+            truncated = await provider.tree_truncated(ref)
             return PolicyResult(
                 policy_id=self.id,
                 passed=False,
-                confidence="high",
-                notes="No README found in .github/, the repository root, or docs/.",
+                confidence="medium" if truncated else "high",
+                notes="No README found in .github/, the repository root, or docs/."
+                + (" File listing was truncated, so a README may have been missed." if truncated else ""),
             )
 
         found: list[Evidence] = []
@@ -56,7 +58,7 @@ class ContactEmailPolicy(Policy):
                 passed=False,
                 confidence="low",
                 evidence=excluded,
-                notes="Only no-reply addresses or addresses inside badge/image URLs were found; review manually.",
+                notes="Only no-reply addresses or addresses inside URLs or images were found; review manually.",
             )
         return PolicyResult(
             policy_id=self.id,

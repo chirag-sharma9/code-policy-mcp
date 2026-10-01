@@ -164,6 +164,19 @@ From an unauthenticated run against Flask, where the scikit-learn import scan ra
 A bad URL or a missing or private repository produces the same shape with empty `results`.
 Nothing raises across the tool boundary, and a report with an error is not cached.
 
+## Reading the results
+
+Every result has `passed` and a `confidence`:
+
+| confidence | meaning |
+|---|---|
+| `high` | Trust `passed` as is. Every pass is `high`: concrete evidence was found. A `high` fail means the search was complete and found nothing. |
+| `medium` | A fail that might be wrong, because the search was incomplete (very large repository, or the 200-file import scan cap). |
+| `low` | A fail where something close was found but did not qualify, such as a `tests/` folder without CI, or a README whose only email is inside a URL. Worth a human look. |
+
+`evidence` lists the files, lines and snippets behind the verdict, and `notes` says what was or
+was not checked.
+
 ## Running things by hand
 
 ```bash

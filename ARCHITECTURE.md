@@ -114,9 +114,16 @@ class PolicyResult(BaseModel):
     notes: str | None = None
 ```
 
-`confidence` exists because these checks are heuristics. A README email might be a `noreply`
-address; a `tests/` directory without CI config is weaker evidence than a workflow file. The
-policy says what it saw; a human decides what it means.
+`confidence` exists because these checks are heuristics. It answers one question: can the reader
+act on `passed` without looking further? Every policy follows the same three rules:
+
+| confidence | when | example |
+|---|---|---|
+| `high` | The verdict rests on concrete evidence, or on a complete search that found nothing. Every pass is `high`. | A workflow file exists; no README anywhere in a fully listed tree. |
+| `medium` | The search was incomplete, so a fail might be wrong. Only fails can be `medium`. | The file listing was truncated; the import scan hit its 200-file cap. |
+| `low` | Something related was found that the rule cannot count. A human should look. Only fails can be `low`. | `tests/` exists but no CI config; the README's only addresses are `noreply` or inside URLs. |
+
+The policy says what it saw; a human decides what it means.
 
 ### 4.5 Async, concurrent policy evaluation
 
