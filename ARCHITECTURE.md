@@ -198,8 +198,13 @@ In production the server would run over Streamable HTTP behind OAuth, with per-t
 (`policies:read`, `repos:scan`) and an audit log of every tool call with caller identity. Evidence
 in results is what makes the audit log useful.
 
-### 5.6 Better confidence scoring mechanism
+### 5.6 Better CI/CD checks
+In the future, instead of just validating the expected CI files exist, we can build logic
+around reading those files and determining if a CI/CD workflow is actually set up and working.
 
+### 5.7 Better confidence scoring mechanism
+This could involve a combination of detailed and reviewed rules in the code + an independent model
+we train to determine confidence scores/levels for any and all policies that are in place.
 
 ## 6. What I would do next, in order
 
