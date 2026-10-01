@@ -57,12 +57,16 @@ claude mcp add repo-policy -- uv --directory /ABSOLUTE/PATH/TO/code-policy-mcp r
 
 Then `/mcp` inside Claude Code shows the server and its tools.
 
-## GitHub token (recommended)
+## GitHub token (highly recommended)
 
 Unauthenticated calls are limited to 60 per hour, and the scikit-learn import scan can read up
 to 200 files on a repository that does not declare it. A token raises the limit to 5,000 per hour.
-Create a fine-grained personal access token with read access to public repositories, then pass it
-to the server:
+Create a fine-grained personal access token with read access to public repositories:
+
+```
+github.com → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Set repository access to "Public repositories"
+```
+Pass the token to the server:
 
 ```json
 "repo-policy": {
@@ -71,8 +75,28 @@ to the server:
   "env": { "GITHUB_TOKEN": "github_pat_..." }
 }
 ```
+Then quit Claude Desktop completely and reopen it.
 
 For Claude Code, `export GITHUB_TOKEN=...` in the shell before `claude mcp add`, or add `-e GITHUB_TOKEN=...`.
+
+## Full mcp server cofig section example for claude desktop
+
+```
+  "mcpServers": {
+    "repo-policy": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/ChiragSharma/trustible/code-policy-mcp",
+        "run",
+        "repo-policy"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "github_pat_..."
+      }
+    }
+  },
+```
 
 ## Example
 
