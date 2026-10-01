@@ -15,10 +15,10 @@ the second platform, the hundredth repository, and the customer-defined rule are
 ## 2. Design goals
 
 - **Deterministic.** A governance verdict must be reproducible and explainable. No LLM in the
-  evaluation path. The agent asks; the server computes; the agent reports.
+  evaluation path. The agent asks -> the server computes -> the agent reports.
 - **Evidence, not booleans.** Every result carries what was found and where, so a human can
   audit it.
-- **Small surface, clear seams.** Three abstractions - provider, policy, result. Nothing
+- **Small surface, clear seperations.** Three abstractions - provider, policy, result. Nothing
   speculative built on top of them.
 - **Cheap per repository.** No cloning. A handful of HTTP calls per repo, cost should scale with the number of relevant files, not repo size.
 
@@ -65,21 +65,29 @@ mattered.
 ### 4.2 `RepositoryProvider` interface
 
 ```python
-class RepositoryProvider(Protocol):
+class RepositoryProvider(ABC):
+    @abstractmethod
     async def resolve(self, url: str) -> RepoRef                      # owner, name, default branch, sha
+    @abstractmethod
     async def list_files(self, ref: RepoRef) -> list[str]             # paths at that sha
+    @abstractmethod
+    async def tree_truncated(self, ref: RepoRef) -> bool              # listing capped by the platform?
+    @abstractmethod
     async def read_file(self, ref: RepoRef, path: str) -> str | None
 ```
 
-Policies only ever see this interface. Adding Bitbucket or GitLab is a new class; policies do
-not change. URL parsing decides which provider handles a request.
+Policies only ever see this interface. Adding Bitbucket or GitLab is a new subclass; policies do
+not change. URL parsing decides which provider handles a request. Interfaces are abstract base
+classes rather than `typing.Protocol`: a provider or policy that forgets a method fails when it
+is instantiated, not when a policy first calls it mid-scan.
 
 ### 4.3 `Policy` interface and registry
 
 ```python
-class Policy(Protocol):
+class Policy(ABC):
     id: str
     description: str
+    @abstractmethod
     async def evaluate(self, ref: RepoRef, provider: RepositoryProvider) -> PolicyResult
 ```
 
@@ -106,21 +114,32 @@ class PolicyResult(BaseModel):
     notes: str | None = None
 ```
 
-`confidence` exists because these checks are heuristics. A README email might be a `noreply`
-address; a `tests/` directory without CI config is weaker evidence than a workflow file. The
-policy says what it saw; a human decides what it means.
+`confidence` exists because these checks are heuristics. It answers one question: can the reader
+act on `passed` without looking further? Every policy follows the same three rules:
+
+| confidence | when | example |
+|---|---|---|
+| `high` | The verdict rests on concrete evidence, or on a complete search that found nothing. Every pass is `high`. | A workflow file exists; no README anywhere in a fully listed tree. |
+| `medium` | The search was incomplete, so a fail might be wrong. Only fails can be `medium`. | The file listing was truncated; the import scan hit its 200-file cap. |
+| `low` | Something related was found that the rule cannot count. A human should look. Only fails can be `low`. | `tests/` exists but no CI config; the README's only addresses are `noreply` or inside URLs. |
+
+The policy says what it saw, a human decides what it means.
 
 ### 4.5 Async, concurrent policy evaluation
 
-`httpx.AsyncClient` throughout; `asyncio.gather` across policies. Each policy fetches only what it
-needs; shared reads (README, file list) are memoized per request so three policies do not
-trigger three tree calls.
+`httpx.AsyncClient` throughout, `asyncio.gather` across policies. Each policy fetches only what it
+needs. Shared reads (README, file list) are memoized per request so three policies do not
+trigger three tree calls. In practice: `engine.py` fires all selected policies at once with asyncio.gather. 
+They share the one provider instance, so when all three ask for the file list, GitHub is only called once.
+
 
 ### 4.6 Caching on commit SHA
 
 A repository at a given SHA is immutable, so a report at that SHA is valid forever. Cache key
-is `(provider, owner, repo, sha, policy_ids)`. In-memory for this exercise; Redis with no
-expiry in production.
+is `(provider, owner, repo, sha, policy_ids)`. In-memory dict for this exercise, Redis with no
+expiry should be the production choice. What a cache hit saves: every call spends two cheap requests - 
+repo metadata for the default branch, and the branch ref for the sha. Those come back in a few hundred bytes each. 
+What the cache skips is everything after: the recursive tree call, which can be megabytes on a large repo.
 
 ### 4.7 MCP transport: stdio
 
@@ -133,13 +152,13 @@ balancing). Auth is out of scope for now (read-only tool over public repos). It 
 | Policy | Passes when | Evidence | Known gaps |
 |---|---|---|---|
 | `ci_tests` | Any of `.github/workflows/*.yml|yaml`, `.circleci/config.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `.travis.yml`, `azure-pipelines.yml` exists | Matching paths | A workflow that only lints still passes. A `tests/` dir without CI is reported as `passed=false, confidence=low` with a note. |
-| `contact_email` | A README (`README`, `README.md`, `README.rst`, any case) contains an RFC-ish email | Path, line, the address | Excludes `noreply`/`no-reply` and addresses inside image/badge URLs. Does not verify deliverability. |
+| `contact_email` | A README (`README`, `README.md`, `README.rst`, any case) located per GitHub's documentation: in the project root, .github/, or docs/ contains an RFC-ish email | Path, line, the address | Excludes `noreply`/`no-reply` and addresses inside image/badge URLs. Nested READMEs elsewhere (vendored code, examples) are ignored. Does not verify deliverability. |
 | `package_usage[scikit-learn]` | `scikit-learn`/`sklearn` in `requirements*.txt`, `pyproject.toml`, `setup.py`, `setup.cfg`, `Pipfile`, `environment.yml`; or `import sklearn` / `from sklearn` in any `.py` | Path, line, snippet | Import scan capped at 200 `.py` files (largest-first is not attempted; first 200 in tree order). Over the cap → `confidence=medium`. Comments and strings can false-positive. |
 
 ## 5. Scaling scenarios
 
 ### 5.1 More validations
-New `Policy` class, register it, done. Nothing else changes. The report shape already handles N
+Set up a new `Policy` class and register it, done. Nothing else changes. The report shape already handles N
 results.
 
 ### 5.2 Other platforms (Bitbucket, GitLab, Azure DevOps)
@@ -149,26 +168,28 @@ by platform (`bitbucket-pipelines.yml`), so `ci_tests` grows its pattern list ra
 becoming provider-specific.
 
 ### 5.3 Hundreds of repositories
-- Current design is already async and cheap per repo (~3–6 HTTP calls).
-- Add a `check_repositories(urls)` tool that fans out with a bounded semaphore (respecting
-  provider rate limits) and returns a summary plus per-repo reports.
-- Move the cache to Redis keyed on SHA; most re-scans are cache hits because most repos do
+- Current design is already async and cheap per repo (~3-6 HTTP calls).
+- Add a second tool that takes a list of repo URLs and checks them all at once, 
+  but only a limited number at a time so we don't blast GitHub and hit its rate limit. 
+  It returns one overall summary plus the full report for each repo.
+- Move the cache to Redis keyed on SHA; most quick re-scans are cache hits because most repos do
   not change between scans.
-- For thousands: a job queue (Celery/SQS) with the MCP tool submitting and polling, plus
-  webhook-triggered re-evaluation on push so scans happen on change rather than on schedule.
-- Rate limits are the real ceiling. A GitHub App installation token per organization scales
+- For thousands: a message queue could be implemented with the MCP tool submitting and polling, 
+  plus webhook-triggered re-evaluation on push so scans happen on change rather than on schedule.
+- Rate limits are the real ceiling. A GitHub token per organization scales
   limits with customers rather than sharing one PAT.
 
 ### 5.4 User-defined policies
 Two tiers:
 1. **Parameterized built-ins** (exists now): `PackageUsagePolicy(package="X")`,
    `FilePresencePolicy(pattern=...)`, `ContentMatchPolicy(path_glob=..., regex=...)`. Most
-   customer asks ("scan for package X", "require a `SECURITY.md`") are instances of these.
+   customer asks ("scan for package X", "require a `SECURITY.md`") are instances of these and
+   we can reuse or build upon the existing logic.
 2. **Declarative rules**: a JSON/YAML rule referencing a built-in by id with parameters, stored
-   per tenant, loaded into the registry at startup. Validated with Pydantic so a bad rule fails
-   at load, not at scan.
+   per customer/group, loaded into the registry at startup. Should be validated with Pydantic 
+   so a bad rule fails at load, not at scan.
 
-Rules that need data outside the repo ("only group Y can access") are a different provider -
+Rules that need data outside the repo ("only group Y can access") can be a different provider -
 a `PlatformAdminProvider` with `list_collaborators` - not a different policy model. The policy
 interface stays the same; the provider grows.
 
@@ -177,18 +198,28 @@ In production the server would run over Streamable HTTP behind OAuth, with per-t
 (`policies:read`, `repos:scan`) and an audit log of every tool call with caller identity. Evidence
 in results is what makes the audit log useful.
 
+### 5.6 Better CI/CD checks
+In the future, instead of just validating the expected CI files exist, we can build logic
+around reading those files and determining if a CI/CD workflow is actually set up and working.
+
+### 5.7 Better confidence scoring mechanism
+This could involve a combination of detailed and reviewed rules in the code + an independent model
+we train to determine confidence scores/levels for any and all policies that are in place.
+
 ## 6. What I would do next, in order
 
-1. `check_repositories` batch tool with bounded concurrency.
+1. `check_repositories` batch tool with a cionfigurable bounded concurrency.
 2. Redis cache.
-3. `ContentMatchPolicy` and `FilePresencePolicy` generics, then the declarative rule loader.
-4. Bitbucket provider to prove the seam.
-5. Evals: a fixed set of known repos with expected results, run in CI, so heuristic changes are
-   measured rather than eyeballed.
+3. Multiple sources implementing the RepositoryProvider interface (Gitlab, Bitbuket, etc.)
+4. Switch to Streamable HTTP transport and add OAuth.
+5. Deploy the server to a container with well set up auditing/logging.
+6. `ContentMatchPolicy` and `FilePresencePolicy` generics, then the declarative YAML rule loader.
+7. Evals: a fixed set of known repos with expected results, run in CI, so heuristic/rule changes 
+   are measured rather than eyeballed.
 
 ## 7. Out of scope, deliberately
 
 Web framework (Django/FastAPI) - nothing here needs HTTP routing beyond what FastMCP provides.
 Database - results are derived and cacheable; persistence belongs with the batch/queue layer.
 LLM-assisted checks - tempting for "does the README explain how to report issues", but they
-belong in a separate policy class with `confidence=low` and are not needed for these three.
+would belong in a separate policy class with careful implementation and evaluation.

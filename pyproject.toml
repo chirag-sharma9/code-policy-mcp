@@ -1,0 +1,31 @@
+[project]
+name = "repo-policy"
+version = "0.1.0"
+description = "MCP server that checks public GitHub repositories against governance policies."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2,<2",
+    "httpx>=0.27",
+    "pydantic>=2",
+]
+
+[project.scripts]
+repo-policy = "repo_policy.server:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_policy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
