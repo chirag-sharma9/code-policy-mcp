@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
@@ -18,7 +18,7 @@ class AppContext:
 
 
 @asynccontextmanager
-async def lifespan(_: FastMCP) -> AsyncIterator[AppContext]:
+async def lifespan(_: FastMCP) -> AsyncGenerator[AppContext, None]:
     # One client and one engine per process: connection reuse plus a cache that spans tool calls.
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SECONDS) as client:
         yield AppContext(engine=Engine(client))
