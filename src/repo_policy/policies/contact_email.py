@@ -6,6 +6,8 @@ from repo_policy.policies.registry import registry
 from repo_policy.providers.base import RepositoryProvider
 
 _README_NAMES = frozenset({"readme", "readme.md", "readme.rst"})
+# GitHub surfaces the first README found in this order (docs.github.com, "About READMEs").
+_README_DIRS = (".github/", "", "docs/")
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 _NOREPLY = re.compile(r"no-?reply", re.IGNORECASE)
 _URL = re.compile(r"https?://\S+")
@@ -14,14 +16,17 @@ _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)|<img\b[^>]*>|^\s*\.\.\s+image::.*$", 
 
 class ContactEmailPolicy(Policy):
     id = "contact_email"
-    description = "A README exists at the repository root and contains a contact email address."
+    description = "The repository's front-page README (.github/, root or docs/) contains a contact email address."
 
     async def evaluate(self, ref: RepoRef, provider: RepositoryProvider) -> PolicyResult:
         files = await provider.list_files(ref)
-        readmes = sorted(p for p in files if "/" not in p and p.lower() in _README_NAMES)
+        readmes = _front_page_readmes(files)
         if not readmes:
             return PolicyResult(
-                policy_id=self.id, passed=False, confidence="high", notes="No README found at the repository root."
+                policy_id=self.id,
+                passed=False,
+                confidence="high",
+                notes="No README found in .github/, the repository root, or docs/.",
             )
 
         found: list[Evidence] = []
@@ -60,6 +65,17 @@ class ContactEmailPolicy(Policy):
             evidence=[Evidence(path=p) for p in readmes],
             notes="README found but it contains no email address.",
         )
+
+
+def _front_page_readmes(files: list[str]) -> list[str]:
+    """READMEs in the first directory, by GitHub's precedence, that has one."""
+    for directory in _README_DIRS:
+        found = sorted(
+            p for p in files if p.startswith(directory) and p[len(directory):].lower() in _README_NAMES
+        )
+        if found:
+            return found
+    return []
 
 
 registry.register(ContactEmailPolicy())

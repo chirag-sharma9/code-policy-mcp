@@ -141,7 +141,7 @@ balancing). Auth is out of scope for now (read-only tool over public repos). It 
 | Policy | Passes when | Evidence | Known gaps |
 |---|---|---|---|
 | `ci_tests` | Any of `.github/workflows/*.yml|yaml`, `.circleci/config.yml`, `.gitlab-ci.yml`, `Jenkinsfile`, `.travis.yml`, `azure-pipelines.yml` exists | Matching paths | A workflow that only lints still passes. A `tests/` dir without CI is reported as `passed=false, confidence=low` with a note. |
-| `contact_email` | A README (`README`, `README.md`, `README.rst`, any case) located per GitHub's documentation: in the project root, .github/, or docs/ contains an RFC-ish email | Path, line, the address | Excludes `noreply`/`no-reply` and addresses inside image/badge URLs. Does not verify deliverability. |
+| `contact_email` | A README (`README`, `README.md`, `README.rst`, any case) located per GitHub's documentation: in the project root, .github/, or docs/ contains an RFC-ish email | Path, line, the address | Excludes `noreply`/`no-reply` and addresses inside image/badge URLs. Nested READMEs elsewhere (vendored code, examples) are ignored. Does not verify deliverability. |
 | `package_usage[scikit-learn]` | `scikit-learn`/`sklearn` in `requirements*.txt`, `pyproject.toml`, `setup.py`, `setup.cfg`, `Pipfile`, `environment.yml`; or `import sklearn` / `from sklearn` in any `.py` | Path, line, snippet | Import scan capped at 200 `.py` files (largest-first is not attempted; first 200 in tree order). Over the cap → `confidence=medium`. Comments and strings can false-positive. |
 
 ## 5. Scaling scenarios
