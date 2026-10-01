@@ -100,18 +100,18 @@ For Claude Code, `export GITHUB_TOKEN=...` in the shell before `claude mcp add`,
 
 ## Example
 
-Real output from Claude Desktop, unauthenticated, against Flask:
+Real output from Claude Desktop against a repository that passes all three policies:
 
 ```json
-{ "url": "https://github.com/pallets/flask" }
+{ "url": "https://github.com/interpretml/interpret" }
 ```
 
 ```json
 {
-  "url": "https://github.com/pallets/flask",
+  "url": "https://github.com/interpretml/interpret",
   "ref": {
-    "provider": "github", "owner": "pallets", "name": "flask",
-    "default_branch": "main", "sha": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35"
+    "provider": "github", "owner": "interpretml", "name": "interpret",
+    "default_branch": "main", "sha": "560f8dde814cac03aec89e189bc9874012c7f1a5"
   },
   "results": [
     {
@@ -119,30 +119,50 @@ Real output from Claude Desktop, unauthenticated, against Flask:
       "passed": true,
       "confidence": "high",
       "evidence": [
-        { "path": ".github/workflows/lock.yaml", "line": null, "snippet": null },
-        { "path": ".github/workflows/pre-commit.yaml", "line": null, "snippet": null },
-        { "path": ".github/workflows/publish.yaml", "line": null, "snippet": null },
-        { "path": ".github/workflows/tests.yaml", "line": null, "snippet": null },
-        { "path": ".github/workflows/zizmor.yaml", "line": null, "snippet": null }
+        { "path": ".github/workflows/ci.yml", "line": null, "snippet": null },
+        { "path": ".github/workflows/release_interpret.yml", "line": null, "snippet": null },
+        { "path": ".github/workflows/release_powerlift.yml", "line": null, "snippet": null },
+        { "path": ".github/workflows/stale.yml", "line": null, "snippet": null }
       ],
-      "notes": "Found 5 CI configuration file(s). Contents were not inspected."
+      "notes": "Found 4 CI configuration file(s). Contents were not inspected."
     },
     {
       "policy_id": "contact_email",
-      "passed": false,
+      "passed": true,
       "confidence": "high",
-      "evidence": [{ "path": "README.md", "line": null, "snippet": null }],
-      "notes": "README found but it contains no email address."
+      "evidence": [{ "path": "README.md", "line": 775, "snippet": "interpret@microsoft.com" }],
+      "notes": "Deliverability was not verified."
+    },
+    {
+      "policy_id": "package_usage[scikit-learn]",
+      "passed": true,
+      "confidence": "high",
+      "evidence": [
+        { "path": "python/interpret-core/setup.py", "line": 230, "snippet": "\"linear\": [\"scikit-learn>=1.6.0\"]," },
+        { "path": "python/interpret-core/setup.py", "line": 231, "snippet": "\"tree\": [\"scikit-learn>=1.6.0\"]," },
+        { "path": "python/interpret-core/setup.py", "line": 245, "snippet": "\"scikit-learn>=1.6.0\"," },
+        { "path": "python/powerlift/pyproject.toml", "line": 56, "snippet": "\"scikit-learn\"," }
+      ],
+      "notes": "scikit-learn is declared in a dependency manifest; import scan skipped."
     }
   ],
+  "error": null
+}
+```
+
+When something goes wrong, the report keeps whatever finished and says why the rest did not.
+From an unauthenticated run against Flask, where the scikit-learn import scan ran out of quota:
+
+```json
+{
+  "url": "https://github.com/pallets/flask",
+  "results": [ "…ci_tests passed, contact_email failed, both with evidence…" ],
   "error": "package_usage[scikit-learn]: GitHub API rate limit exceeded; resets at unix time 1790828374; set GITHUB_TOKEN to raise the limit"
 }
 ```
 
-The third policy ran out of unauthenticated quota mid-scan (Flask has no scikit-learn, so the
-import scan reads many files). The two finished results are kept, the failure is named in
-`error`, and the report is not cached so the next call retries. A bad URL or a missing or private
-repository produces the same shape with empty `results`. Nothing raises across the tool boundary.
+A bad URL or a missing or private repository produces the same shape with empty `results`.
+Nothing raises across the tool boundary, and a report with an error is not cached.
 
 ## Running things by hand
 
