@@ -92,7 +92,7 @@ For Claude Code, `export GITHUB_TOKEN=...` in the shell before `claude mcp add`,
         "repo-policy"
       ],
       "env": {
-        "GITHUB_TOKEN": "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"
+        "GITHUB_TOKEN": "github_pat_..."
       }
     }
   },
