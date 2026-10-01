@@ -1,4 +1,4 @@
-# repo-policy
+# Repository Policy Governance 
 
 An MCP server that checks a public GitHub repository against governance policies and returns
 evidence an AI agent can report. No cloning, no LLM in the evaluation path: a handful of GitHub
@@ -16,8 +16,18 @@ Design and trade-offs are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Setup
 
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/). uv can be installed by:
 
+In MacOS and Linux:
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+In Windows:
+```
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+After that, clone repo and install dependencies:
 ```bash
 git clone https://github.com/chirag-sharma9/code-policy-mcp.git
 cd code-policy-mcp
@@ -43,10 +53,8 @@ uv run pytest    # 12 tests, well under a second
    }
    ```
 
-   If Claude Desktop cannot find `uv`, use its full path as `command` (`which uv` on macOS/Linux,
-   `where uv` on Windows).
-3. Quit Claude Desktop completely and reopen it. The tools menu in the chat box should list
-   `repo-policy` with two tools: `check_repository` and `list_policies`.
+3. Quit Claude Desktop completely and reopen it. The connectors menu should list
+   `repo-policy` as the mcp with two tools: `check_repository` and `list_policies`.
 4. Try it: *"Check https://github.com/pallets/flask against all repository policies."*
 
 ## Connect to Claude Code
@@ -98,7 +106,7 @@ For Claude Code, `export GITHUB_TOKEN=...` in the shell before `claude mcp add`,
   },
 ```
 
-## Example
+## Examples
 
 Real output from Claude Desktop against a repository that passes all three policies:
 
