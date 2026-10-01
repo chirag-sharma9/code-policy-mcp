@@ -76,25 +76,32 @@ For Claude Code, `export GITHUB_TOKEN=...` in the shell before `claude mcp add`,
 
 ## Example
 
-Tool call:
+Real output from Claude Desktop, unauthenticated, against Flask:
 
 ```json
-{ "url": "https://github.com/pallets/flask", "policies": ["ci_tests", "contact_email"] }
+{ "url": "https://github.com/pallets/flask" }
 ```
-
-Response shape (abridged):
 
 ```json
 {
   "url": "https://github.com/pallets/flask",
-  "ref": { "provider": "github", "owner": "pallets", "name": "flask", "default_branch": "main", "sha": "…" },
+  "ref": {
+    "provider": "github", "owner": "pallets", "name": "flask",
+    "default_branch": "main", "sha": "d73fa1cdcbd8b1465c151db8924ba58b1dd14e35"
+  },
   "results": [
     {
       "policy_id": "ci_tests",
       "passed": true,
       "confidence": "high",
-      "evidence": [{ "path": ".github/workflows/tests.yaml", "line": null, "snippet": null }],
-      "notes": "Found 1 CI configuration file(s). Contents were not inspected."
+      "evidence": [
+        { "path": ".github/workflows/lock.yaml", "line": null, "snippet": null },
+        { "path": ".github/workflows/pre-commit.yaml", "line": null, "snippet": null },
+        { "path": ".github/workflows/publish.yaml", "line": null, "snippet": null },
+        { "path": ".github/workflows/tests.yaml", "line": null, "snippet": null },
+        { "path": ".github/workflows/zizmor.yaml", "line": null, "snippet": null }
+      ],
+      "notes": "Found 5 CI configuration file(s). Contents were not inspected."
     },
     {
       "policy_id": "contact_email",
@@ -104,12 +111,14 @@ Response shape (abridged):
       "notes": "README found but it contains no email address."
     }
   ],
-  "error": null
+  "error": "package_usage[scikit-learn]: GitHub API rate limit exceeded; resets at unix time 1790828374; set GITHUB_TOKEN to raise the limit"
 }
 ```
 
-A bad URL, a missing or private repository, or a rate limit returns the same shape with `error`
-set and `results` possibly partial. Nothing raises across the tool boundary.
+The third policy ran out of unauthenticated quota mid-scan (Flask has no scikit-learn, so the
+import scan reads many files). The two finished results are kept, the failure is named in
+`error`, and the report is not cached so the next call retries. A bad URL or a missing or private
+repository produces the same shape with empty `results`. Nothing raises across the tool boundary.
 
 ## Running things by hand
 
